@@ -62,9 +62,13 @@ jobs:
         run: |
           mkdir -p input output separated tempmix
 
+      - name: Load cookies
+        run: |
+          echo "${{ secrets.YTDLP_COOKIES_BASE64 }}" | base64 -d > cookies.txt
+
       - name: Download audio
         run: |
-          yt-dlp --cookies secrets/cookies.txt -x --audio-format wav \
+          yt-dlp --cookies cookies.txt -x --audio-format wav \
           -o "input/source.%(ext)s" "${{ github.event.inputs.youtube_url }}"
 
       # LIGHT MODE
