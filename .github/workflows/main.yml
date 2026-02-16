@@ -1,4 +1,4 @@
-name: AI NoBass Builder (Build Only - Cached Tools)
+name: AI NoBass Builder (Build Only - Hardened yt-dlp)
 
 on:
   workflow_dispatch:
@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # =========================
-      # LOAD CACHE (TOOLS ONLY)
+      # LOAD CACHE
       # =========================
       - name: Load Python Tools Cache
         id: cache-python
@@ -52,91 +52,19 @@ jobs:
           key: nobass-pytools-v1
 
       # =========================
-      # SYSTEM DEPS ONLY
+      # SYSTEM + JS RUNTIME
       # =========================
-      - name: Install system deps
+      - name: Install system deps + JS runtime
         run: |
           sudo apt update
-          sudo apt install -y ffmpeg zip python3
+          sudo apt install -y ffmpeg zip python3 nodejs npm
 
       # =========================
-      # VERIFY TOOLS (DEBUG SAFE)
+      # VERIFY TOOLS
       # =========================
       - name: Verify tools
         run: |
           yt-dlp --version
           demucs --help
-          python3 -c "import torch, torchaudio; print('torch:', torch.__version__); print('torchaudio:', torchaudio.__version__)"
-
-      # =========================
-      # PREPARE
-      # =========================
-      - name: Prepare folders
-        run: |
-          mkdir -p input output separated tempmix
-
-      # =========================
-      # COOKIES
-      # =========================
-      - name: Load cookies
-        run: |
-          echo "${{ secrets.YTDLP_COOKIES_BASE64 }}" | base64 -d > cookies.txt
-
-      # =========================
-      # DOWNLOAD AUDIO
-      # =========================
-      - name: Download audio
-        run: |
-          yt-dlp --cookies cookies.txt -x --audio-format wav \
-          -o "input/source.%(ext)s" "${{ github.event.inputs.youtube_url }}"
-
-      # =========================
-      # LIGHT MODE
-      # =========================
-      - name: Light mode
-        if: ${{ github.event.inputs.mode == 'light' }}
-        run: |
-          ffmpeg -i input/source.wav \
-          -af "highpass=f=180" \
-          -vn -acodec mp3 -ab ${{ github.event.inputs.bitrate }} \
-          output/nobass_light_${{ github.event.inputs.bitrate }}.mp3
-
-      # =========================
-      # PRO MODE (AI)
-      # =========================
-      - name: AI separation
-        if: ${{ github.event.inputs.mode == 'pro' }}
-        run: |
-          demucs input/source.wav -n htdemucs --two-stems bass -o separated
-
-      - name: Build AI NoBass
-        if: ${{ github.event.inputs.mode == 'pro' }}
-        run: |
-          cp separated/htdemucs/source/vocals.wav tempmix/
-          cp separated/htdemucs/source/drums.wav tempmix/
-          cp separated/htdemucs/source/other.wav tempmix/
-
-          ffmpeg -i tempmix/vocals.wav \
-                 -i tempmix/drums.wav \
-                 -i tempmix/other.wav \
-          -filter_complex amix=inputs=3:dropout_transition=0 \
-          -vn -acodec mp3 -ab ${{ github.event.inputs.bitrate }} \
-          output/nobass_ai_${{ github.event.inputs.bitrate }}.mp3
-
-      # =========================
-      # PACKAGE
-      # =========================
-      - name: Zip output
-        run: zip -r output.zip output/
-
-      # =========================
-      # RELEASE
-      # =========================
-      - name: Auto Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: nobass-${{ github.run_number }}
-          name: "AI NoBass Build #${{ github.run_number }}"
-          files: output.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          node -v
+          python3 -
