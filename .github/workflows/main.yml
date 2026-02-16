@@ -20,36 +20,36 @@ jobs:
           sudo apt update
           sudo apt install -y ffmpeg python3 python3-pip git
 
-      - name: Install Demucs AI
+      - name: Install AI deps
         run: |
           pip3 install --upgrade pip
-          pip3 install demucs
+          pip3 install demucs torch torchaudio torchcodec
 
-      - name: Process audio (AI stem separation + remove bass)
+      - name: AI Separate + Remove Bass + Merge (128kbps)
         run: |
           mkdir -p output
           shopt -s nullglob
 
           for f in input/*.mp3; do
-            name=$(basename "$f" .mp3)
-            echo "AI separating: $name"
+            base=$(basename "$f" .mp3)
+            echo "AI separating: $base"
 
-            # 1) AI STEM SEPARATION
-            demucs -n htdemucs "$f"
+            # AI STEM SEPARATION (FORCE WAV OUTPUT)
+            demucs -n htdemucs --two-stems=none --float32 --segment 10 "$f"
 
-            STEMDIR="separated/htdemucs/$name"
+            STEMDIR="separated/htdemucs/$base"
 
-            # 2) REMOVE BASS TRACK
+            # REMOVE BASS TRACK
             rm -f "$STEMDIR/bass.wav"
 
-            # 3) MERGE STEMS (vocals + drums + other)
+            # MERGE STEMS (vocals + drums + other)
             ffmpeg -y \
               -i "$STEMDIR/vocals.wav" \
               -i "$STEMDIR/drums.wav" \
               -i "$STEMDIR/other.wav" \
               -filter_complex "amix=inputs=3:normalize=0" \
-              -b:a 128k \
-              "output/${name}_AI_REAL_NOBASS_128kbps.mp3"
+              -c:a libmp3lame -b:a 128k \
+              "output/${base}_AI_REAL_NOBASS_128kbps.mp3"
 
           done
 
@@ -60,3 +60,4 @@ jobs:
           git add output/
           git commit -m "auto: AI real no-bass build 128kbps" || echo "No changes"
           git push
+          
