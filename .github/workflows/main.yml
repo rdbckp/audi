@@ -1,13 +1,13 @@
-name: Manual NoBass Audio Builder
+name: AI Real NoBass Builder (128kbps)
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # <<< INI KUNCI UTAMA FIX 403
+  contents: write
 
 jobs:
-  nobass-build:
+  ai-nobass:
     runs-on: ubuntu-latest
 
     steps:
@@ -15,28 +15,48 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install ffmpeg
+      - name: Install system deps
         run: |
           sudo apt update
-          sudo apt install -y ffmpeg
+          sudo apt install -y ffmpeg python3 python3-pip git
 
-      - name: Build No-Bass Audio (64kbps)
+      - name: Install Demucs AI
+        run: |
+          pip3 install --upgrade pip
+          pip3 install demucs
+
+      - name: Process audio (AI stem separation + remove bass)
         run: |
           mkdir -p output
           shopt -s nullglob
+
           for f in input/*.mp3; do
-            name=$(basename "$f")
-            echo "Processing $name"
-            ffmpeg -y -i "$f" \
-              -af "highpass=f=350" \
-              -b:a 64k \
-              "output/nobass_64k_$name"
+            name=$(basename "$f" .mp3)
+            echo "AI separating: $name"
+
+            # 1) AI STEM SEPARATION
+            demucs -n htdemucs "$f"
+
+            STEMDIR="separated/htdemucs/$name"
+
+            # 2) REMOVE BASS TRACK
+            rm -f "$STEMDIR/bass.wav"
+
+            # 3) MERGE STEMS (vocals + drums + other)
+            ffmpeg -y \
+              -i "$STEMDIR/vocals.wav" \
+              -i "$STEMDIR/drums.wav" \
+              -i "$STEMDIR/other.wav" \
+              -filter_complex "amix=inputs=3:normalize=0" \
+              -b:a 128k \
+              "output/${name}_AI_REAL_NOBASS_128kbps.mp3"
+
           done
 
-      - name: Commit & Push Results
+      - name: Commit & Push results
         run: |
-          git config user.name "nobass-bot"
-          git config user.email "nobass-bot@users.noreply.github.com"
+          git config user.name "ai-nobass-bot"
+          git config user.email "ai-nobass-bot@users.noreply.github.com"
           git add output/
-          git commit -m "auto: build no-bass audio 64kbps" || echo "No changes to commit"
+          git commit -m "auto: AI real no-bass build 128kbps" || echo "No changes"
           git push
