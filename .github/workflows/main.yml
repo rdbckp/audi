@@ -1,4 +1,4 @@
-name: AI Real NoBass Builder (128kbps)
+name: AI Real NoBass Builder (128kbps + Release)
 
 on:
   workflow_dispatch:
@@ -18,28 +18,30 @@ jobs:
       - name: Install system deps
         run: |
           sudo apt update
-          sudo apt install -y ffmpeg python3 python3-pip git
+          sudo apt install -y ffmpeg python3 python3-pip zip git
 
-      - name: Install Demucs AI
+      - name: Install AI stack (torch + torchaudio + torchcodec + demucs)
         run: |
           pip3 install --upgrade pip
+          pip3 install torch torchaudio torchcodec
           pip3 install demucs
 
-      - name: Process audio (AI stem separation + remove bass)
+      - name: AI Stem Separation + Real Bass Removal
         run: |
           mkdir -p output
+          mkdir -p release
           shopt -s nullglob
 
           for f in input/*.mp3; do
             name=$(basename "$f" .mp3)
             echo "AI separating: $name"
 
-            # 1) AI STEM SEPARATION (FIXED SEGMENT)
-            demucs -n htdemucs --segment 6 "$f"
+            # 1) STEM SEPARATION (SAFE MODE)
+            demucs -n htdemucs --segment 6 --two-stems none "$f"
 
             STEMDIR="separated/htdemucs/$name"
 
-            # 2) REMOVE BASS TRACK
+            # 2) DELETE BASS TRACK
             rm -f "$STEMDIR/bass.wav"
 
             # 3) MERGE STEMS (vocals + drums + other)
@@ -53,10 +55,31 @@ jobs:
 
           done
 
-      - name: Commit & Push results
+      - name: Zip output
+        run: |
+          cd output
+          zip -r ../release/AI_REAL_NOBASS_128kbps.zip .
+          cd ..
+
+      - name: Commit output
         run: |
           git config user.name "ai-nobass-bot"
           git config user.email "ai-nobass-bot@users.noreply.github.com"
           git add output/
           git commit -m "auto: AI real no-bass build 128kbps" || echo "No changes"
           git push
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ai-nobass-${{ github.run_number }}
+          name: AI Real NoBass Build #${{ github.run_number }}
+          body: |
+            🎧 AI REAL NO-BASS BUILD
+            - AI stem separation (Demucs)
+            - bass.wav removed
+            - vocals + drums + other merged
+            - MP3 128kbps
+            - Real track removal (not EQ / not filter)
+          files: |
+            release/AI_REAL_NOBASS_128kbps.zip
