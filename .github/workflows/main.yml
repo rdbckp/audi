@@ -1,10 +1,10 @@
-name: NoBass Builder (Light / AI Pro Switchable)
+name: AI Audio Separator
 
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "Select mode: light or pro"
+        description: "Select mode"
         required: true
         default: "light"
         type: choice
@@ -12,110 +12,80 @@ on:
           - light
           - pro
 
-permissions:
-  contents: write
+      bitrate:
+        description: "Output bitrate"
+        required: true
+        default: "128k"
+        type: choice
+        options:
+          - 32k
+          - 64k
+          - 96k
+          - 128k
+
+      audio_url:
+        description: "Direct audio file URL"
+        required: true
+        type: string
 
 jobs:
-  nobass:
+  separate:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install base deps
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install system deps
         run: |
           sudo apt update
-          sudo apt install -y ffmpeg python3 python3-pip zip git
+          sudo apt install -y ffmpeg sox unzip zip
 
-      # ======================
-      # MODE RINGAN (FFMPEG)
-      # ======================
-      - name: Light Mode (fast no-bass filter)
+      # ===== MODE LIGHT =====
+      - name: Install Demucs (Light Mode)
         if: ${{ github.event.inputs.mode == 'light' }}
         run: |
-          mkdir -p output release
-          shopt -s nullglob
-          for f in input/*.mp3; do
-            name=$(basename "$f" .mp3)
-            echo "LIGHT MODE processing: $name"
-            ffmpeg -y -i "$f" \
-              -af "highpass=f=350" \
-              -b:a 128k \
-              "output/${name}_LIGHT_NOBASS_128kbps.mp3"
-          done
+          pip install --upgrade pip
+          pip install demucs
 
-      # ======================
-      # MODE AI PRO (DEMUCs)
-      # ======================
-      - name: Install AI stack (PRO MODE)
+      # ===== MODE PRO =====
+      - name: Install Demucs (Pro Mode / AI)
         if: ${{ github.event.inputs.mode == 'pro' }}
         run: |
-          pip3 install --upgrade pip
-          pip3 install torch torchaudio torchcodec demucs
+          pip install --upgrade pip
+          pip install torch torchaudio demucs
 
-      - name: AI Pro Mode (real stem no-bass)
-        if: ${{ github.event.inputs.mode == 'pro' }}
+      - name: Download audio
         run: |
-          mkdir -p output release
-          shopt -s nullglob
+          mkdir -p input
+          wget "${{ github.event.inputs.audio_url }}" -O input/audio.mp3
 
-          for f in input/*.mp3; do
-            name=$(basename "$f" .mp3)
-            echo "AI PRO MODE separating: $name"
+      - name: Run Demucs
+        run: |
+          mkdir -p output
+          demucs input/audio.mp3 -o output
 
-            # 1) STEM SEPARATION (REAL AI)
-            demucs -n htdemucs --segment 6 "$f"
-
-            STEMDIR="separated/htdemucs/$name"
-
-            # 2) DELETE REAL BASS STEM
-            rm -f "$STEMDIR/bass.wav"
-
-            # 3) MERGE STEMS (vocals + drums + other)
-            ffmpeg -y \
-              -i "$STEMDIR/vocals.wav" \
-              -i "$STEMDIR/drums.wav" \
-              -i "$STEMDIR/other.wav" \
-              -filter_complex "amix=inputs=3:normalize=0" \
-              -b:a 128k \
-              "output/${name}_AI_REAL_NOBASS_128kbps.mp3"
-
+      - name: Convert bitrate
+        run: |
+          mkdir -p final
+          BITRATE="${{ github.event.inputs.bitrate }}"
+          for f in output/**/**/*.wav; do
+            name=$(basename "$f" .wav)
+            ffmpeg -y -i "$f" -ab $BITRATE "final/${name}.mp3"
           done
 
-      # ======================
-      # ZIP + RELEASE
-      # ======================
       - name: Zip output
         run: |
-          cd output
-          zip -r ../release/NOBASS_${{ github.event.inputs.mode }}_128kbps.zip .
-          cd ..
+          zip -r separated_output.zip final
 
-      - name: Commit output
-        run: |
-          git config user.name "nobass-bot"
-          git config user.email "nobass-bot@users.noreply.github.com"
-          git add output/
-          git commit -m "auto: nobass build mode=${{ github.event.inputs.mode }}" || echo "No changes"
-          git push
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: nobass-${{ github.event.inputs.mode }}-${{ github.run_number }}
-          name: NoBass Build (${{ github.event.inputs.mode }}) #${{ github.run_number }}
-          body: |
-            🎧 NoBass Build Mode: ${{ github.event.inputs.mode }}
-
-            MODE DETAIL:
-            - light = ffmpeg filter (fast, ringan, small size)
-            - pro   = AI stem separation (Demucs, real bass removal)
-
-            Output:
-            - MP3 128kbps
-            - No bass track
-            - Auto generated by GitHub Actions
-          files: |
-            release/NOBASS_${{ github.event.inputs.mode }}_128kbps.zip
+          tag_name: "demucs-${{ github.run_number }}"
+          name: "Demucs Build #${{ github.run_number }}"
+          files: separated_output.zip
