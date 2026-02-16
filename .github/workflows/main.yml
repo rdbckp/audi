@@ -1,4 +1,4 @@
-name: AI NoBass Builder (yt-dlp)
+name: AI NoBass Builder (yt-dlp cached)
 
 on:
   workflow_dispatch:
@@ -34,31 +34,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup system deps
+      # =========================
+      # CACHE SYSTEM
+      # =========================
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/torch
+            ~/.local
+          key: nobass-cache-v1
+
+      - name: Install system deps
         run: |
           sudo apt update
           sudo apt install -y ffmpeg zip python3 python3-pip
 
-      - name: Install AI tools
+      - name: Install python tools (cached)
         run: |
           pip install --upgrade pip
           pip install yt-dlp demucs torch torchaudio torchcodec
 
       - name: Prepare folders
         run: |
-          mkdir -p input output separated
+          mkdir -p input output separated tempmix
 
-      - name: Download audio from YouTube
+      - name: Download audio
         run: |
           yt-dlp -x --audio-format wav -o "input/source.%(ext)s" "${{ github.event.inputs.youtube_url }}"
 
-      # =========================
-      # LIGHT MODE (EQ CUT BASS)
-      # =========================
-      - name: Light mode processing
+      # LIGHT MODE
+      - name: Light mode
         if: ${{ github.event.inputs.mode == 'light' }}
         run: |
           ffmpeg -i input/source.wav \
@@ -66,18 +75,15 @@ jobs:
           -vn -acodec mp3 -ab ${{ github.event.inputs.bitrate }} \
           output/nobass_light_${{ github.event.inputs.bitrate }}.mp3
 
-      # =========================
-      # PRO MODE (AI SEPARATION)
-      # =========================
-      - name: Pro mode AI separation
+      # PRO MODE
+      - name: AI separation
         if: ${{ github.event.inputs.mode == 'pro' }}
         run: |
           demucs input/source.wav -n htdemucs --two-stems bass -o separated
 
-      - name: Build AI NoBass audio
+      - name: Build AI NoBass
         if: ${{ github.event.inputs.mode == 'pro' }}
         run: |
-          mkdir -p tempmix
           cp separated/htdemucs/source/vocals.wav tempmix/
           cp separated/htdemucs/source/drums.wav tempmix/
           cp separated/htdemucs/source/other.wav tempmix/
@@ -89,22 +95,14 @@ jobs:
           -vn -acodec mp3 -ab ${{ github.event.inputs.bitrate }} \
           output/nobass_ai_${{ github.event.inputs.bitrate }}.mp3
 
-      # =========================
-      # ZIP OUTPUT
-      # =========================
       - name: Zip output
-        run: |
-          zip -r output.zip output/
+        run: zip -r output.zip output/
 
-      # =========================
-      # AUTO RELEASE
-      # =========================
       - name: Auto Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: nobass-${{ github.run_number }}
           name: "AI NoBass Build #${{ github.run_number }}"
-          files: |
-            output.zip
+          files: output.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
