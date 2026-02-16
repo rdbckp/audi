@@ -66,11 +66,7 @@ jobs:
         run: |
           yt-dlp --version
           demucs --help
-          python3 - <<EOF
-import torch, torchaudio
-print("torch:", torch.__version__)
-print("torchaudio:", torchaudio.__version__)
-EOF
+          python3 -c "import torch, torchaudio; print('torch:', torch.__version__); print('torchaudio:', torchaudio.__version__)"
 
       # =========================
       # PREPARE
