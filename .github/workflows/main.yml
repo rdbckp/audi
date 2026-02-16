@@ -1,0 +1,38 @@
+name: Auto NoBass Audio Builder
+
+on:
+  push:
+    paths:
+      - "input/**.mp3"
+
+jobs:
+  nobass-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt update
+          sudo apt install -y ffmpeg
+
+      - name: Build No-Bass Audio (64kbps)
+        run: |
+          mkdir -p output
+          for f in input/*.mp3; do
+            name=$(basename "$f")
+            echo "Processing $name"
+            ffmpeg -y -i "$f" \
+              -af "highpass=f=350" \
+              -b:a 64k \
+              "output/nobass_64k_$name"
+          done
+
+      - name: Commit & Push Results
+        run: |
+          git config user.name "nobass-bot"
+          git config user.email "nobass-bot@users.noreply.github.com"
+          git add output/
+          git commit -m "auto: build no-bass audio 64kbps" || echo "No changes to commit"
+          git push
