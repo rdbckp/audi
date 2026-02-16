@@ -64,7 +64,8 @@ jobs:
 
       - name: Download audio
         run: |
-          yt-dlp -x --audio-format wav -o "input/source.%(ext)s" "${{ github.event.inputs.youtube_url }}"
+          yt-dlp --cookies secrets/cookies.txt -x --audio-format wav \
+          -o "input/source.%(ext)s" "${{ github.event.inputs.youtube_url }}"
 
       # LIGHT MODE
       - name: Light mode
