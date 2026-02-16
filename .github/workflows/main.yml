@@ -1,7 +1,10 @@
 name: Manual NoBass Audio Builder
 
 on:
-  workflow_dispatch:   # manual trigger
+  workflow_dispatch:
+
+permissions:
+  contents: write   # <<< INI KUNCI UTAMA FIX 403
 
 jobs:
   nobass-build:
@@ -9,6 +12,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install ffmpeg
         run: |
