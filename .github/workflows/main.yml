@@ -90,21 +90,14 @@ jobs:
         run: |
           yt-dlp \
             --cookies cookies.txt \
+            --extractor-args "youtube:player_client=android" \
+            --extractor-args "youtube:player_skip=webpage,js" \
             --extract-audio \
             --audio-format wav \
             --audio-quality 0 \
-            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
-            --referer "https://www.youtube.com/" \
-            --geo-bypass \
-            --no-check-certificate \
-            --force-ipv4 \
-            --sleep-interval 2 \
-            --max-sleep-interval 5 \
-            --retries 5 \
-            --fragment-retries 5 \
-            -f bestaudio/best \
+            -f bestaudio \
             -o "input/source.%(ext)s" \
-            "${{ github.event.inputs.youtube_url }}"
+            "${{ github.event.inputs.youtube_url }}
 
       # =========================
       # LIGHT MODE
