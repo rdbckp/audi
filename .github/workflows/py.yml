@@ -1,0 +1,61 @@
+name: AI NoBass - Python Tools Cache Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cache-tools:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # =========================
+      # SYSTEM DEPS
+      # =========================
+      - name: Install system deps
+        run: |
+          sudo apt update
+          sudo apt install -y python3 python3-pip ffmpeg
+
+      # =========================
+      # CACHE LAYER
+      # =========================
+      - name: Cache Python Environment
+        id: cache-python
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/torch
+            ~/.cache/demucs
+            ~/.local/lib/python3.*/site-packages
+            ~/.local/bin
+          key: nobass-pytools-v1
+
+      # =========================
+      # INSTALL TOOLS (ONLY IF CACHE MISS)
+      # =========================
+      - name: Install python tools (cached)
+        if: steps.cache-python.outputs.cache-hit != 'true'
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install --user \
+            yt-dlp \
+            demucs \
+            torch \
+            torchaudio \
+            torchcodec
+
+      # =========================
+      # PRELOAD AI MODELS (OPTIONAL BUT POWERFUL)
+      # =========================
+      - name: Preload Demucs model (htdemucs)
+        if: steps.cache-python.outputs.cache-hit != 'true'
+        run: |
+          python3 - << 'EOF'
+          import torch
+          from demucs.pr
