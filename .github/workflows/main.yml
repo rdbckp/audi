@@ -1,4 +1,4 @@
-name: AI NoBass Builder (yt-dlp cached)
+name: AI NoBass Builder (Build Only - Cached Tools)
 
 on:
   workflow_dispatch:
@@ -37,41 +37,66 @@ jobs:
       - uses: actions/checkout@v4
 
       # =========================
-      # CACHE SYSTEM
+      # LOAD CACHE (TOOLS ONLY)
       # =========================
-      - name: Cache pip
+      - name: Load Python Tools Cache
+        id: cache-python
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/pip
             ~/.cache/torch
-            ~/.local
-          key: nobass-cache-v1
+            ~/.cache/demucs
+            ~/.local/lib/python3.*/site-packages
+            ~/.local/bin
+          key: nobass-pytools-v1
 
+      # =========================
+      # SYSTEM DEPS ONLY
+      # =========================
       - name: Install system deps
         run: |
           sudo apt update
-          sudo apt install -y ffmpeg zip python3 python3-pip
+          sudo apt install -y ffmpeg zip python3
 
-      - name: Install python tools (cached)
+      # =========================
+      # VERIFY TOOLS (DEBUG SAFE)
+      # =========================
+      - name: Verify tools
         run: |
-          pip install --upgrade pip
-          pip install yt-dlp demucs torch torchaudio torchcodec
+          yt-dlp --version
+          demucs --help
+          python3 - <<EOF
+import torch, torchaudio
+print("torch:", torch.__version__)
+print("torchaudio:", torchaudio.__version__)
+EOF
 
+      # =========================
+      # PREPARE
+      # =========================
       - name: Prepare folders
         run: |
           mkdir -p input output separated tempmix
 
+      # =========================
+      # COOKIES
+      # =========================
       - name: Load cookies
         run: |
           echo "${{ secrets.YTDLP_COOKIES_BASE64 }}" | base64 -d > cookies.txt
 
+      # =========================
+      # DOWNLOAD AUDIO
+      # =========================
       - name: Download audio
         run: |
           yt-dlp --cookies cookies.txt -x --audio-format wav \
           -o "input/source.%(ext)s" "${{ github.event.inputs.youtube_url }}"
 
+      # =========================
       # LIGHT MODE
+      # =========================
       - name: Light mode
         if: ${{ github.event.inputs.mode == 'light' }}
         run: |
@@ -80,7 +105,9 @@ jobs:
           -vn -acodec mp3 -ab ${{ github.event.inputs.bitrate }} \
           output/nobass_light_${{ github.event.inputs.bitrate }}.mp3
 
-      # PRO MODE
+      # =========================
+      # PRO MODE (AI)
+      # =========================
       - name: AI separation
         if: ${{ github.event.inputs.mode == 'pro' }}
         run: |
@@ -100,9 +127,15 @@ jobs:
           -vn -acodec mp3 -ab ${{ github.event.inputs.bitrate }} \
           output/nobass_ai_${{ github.event.inputs.bitrate }}.mp3
 
+      # =========================
+      # PACKAGE
+      # =========================
       - name: Zip output
         run: zip -r output.zip output/
 
+      # =========================
+      # RELEASE
+      # =========================
       - name: Auto Release
         uses: softprops/action-gh-release@v1
         with:
