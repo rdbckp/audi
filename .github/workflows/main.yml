@@ -1,17 +1,20 @@
-name: AI Audio Separator
+name: AI NoBass Builder (yt-dlp)
 
 on:
   workflow_dispatch:
     inputs:
-      mode:
-        description: "Select mode"
+      youtube_url:
+        description: "YouTube URL"
         required: true
-        default: "light"
+        type: string
+      mode:
+        description: "Processing mode"
+        required: true
+        default: "pro"
         type: choice
         options:
           - light
           - pro
-
       bitrate:
         description: "Output bitrate"
         required: true
@@ -23,69 +26,85 @@ on:
           - 96k
           - 128k
 
-      audio_url:
-        description: "Direct audio file URL"
-        required: true
-        type: string
+permissions:
+  contents: write
 
 jobs:
-  separate:
+  nobass:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install system deps
+      - name: Setup system deps
         run: |
           sudo apt update
-          sudo apt install -y ffmpeg sox unzip zip
+          sudo apt install -y ffmpeg zip python3 python3-pip
 
-      # ===== MODE LIGHT =====
-      - name: Install Demucs (Light Mode)
+      - name: Install AI tools
+        run: |
+          pip install --upgrade pip
+          pip install yt-dlp demucs torch torchaudio torchcodec
+
+      - name: Prepare folders
+        run: |
+          mkdir -p input output separated
+
+      - name: Download audio from YouTube
+        run: |
+          yt-dlp -x --audio-format wav -o "input/source.%(ext)s" "${{ github.event.inputs.youtube_url }}"
+
+      # =========================
+      # LIGHT MODE (EQ CUT BASS)
+      # =========================
+      - name: Light mode processing
         if: ${{ github.event.inputs.mode == 'light' }}
         run: |
-          pip install --upgrade pip
-          pip install demucs
+          ffmpeg -i input/source.wav \
+          -af "highpass=f=180" \
+          -vn -acodec mp3 -ab ${{ github.event.inputs.bitrate }} \
+          output/nobass_light_${{ github.event.inputs.bitrate }}.mp3
 
-      # ===== MODE PRO =====
-      - name: Install Demucs (Pro Mode / AI)
+      # =========================
+      # PRO MODE (AI SEPARATION)
+      # =========================
+      - name: Pro mode AI separation
         if: ${{ github.event.inputs.mode == 'pro' }}
         run: |
-          pip install --upgrade pip
-          pip install torch torchaudio demucs
+          demucs input/source.wav -n htdemucs --two-stems bass -o separated
 
-      - name: Download audio
+      - name: Build AI NoBass audio
+        if: ${{ github.event.inputs.mode == 'pro' }}
         run: |
-          mkdir -p input
-          wget "${{ github.event.inputs.audio_url }}" -O input/audio.mp3
+          mkdir -p tempmix
+          cp separated/htdemucs/source/vocals.wav tempmix/
+          cp separated/htdemucs/source/drums.wav tempmix/
+          cp separated/htdemucs/source/other.wav tempmix/
 
-      - name: Run Demucs
-        run: |
-          mkdir -p output
-          demucs input/audio.mp3 -o output
+          ffmpeg -i tempmix/vocals.wav \
+                 -i tempmix/drums.wav \
+                 -i tempmix/other.wav \
+          -filter_complex amix=inputs=3:dropout_transition=0 \
+          -vn -acodec mp3 -ab ${{ github.event.inputs.bitrate }} \
+          output/nobass_ai_${{ github.event.inputs.bitrate }}.mp3
 
-      - name: Convert bitrate
-        run: |
-          mkdir -p final
-          BITRATE="${{ github.event.inputs.bitrate }}"
-          for f in output/**/**/*.wav; do
-            name=$(basename "$f" .wav)
-            ffmpeg -y -i "$f" -ab $BITRATE "final/${name}.mp3"
-          done
-
+      # =========================
+      # ZIP OUTPUT
+      # =========================
       - name: Zip output
         run: |
-          zip -r separated_output.zip final
+          zip -r output.zip output/
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      # =========================
+      # AUTO RELEASE
+      # =========================
+      - name: Auto Release
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: "demucs-${{ github.run_number }}"
-          name: "Demucs Build #${{ github.run_number }}"
-          files: separated_output.zip
+          tag_name: nobass-${{ github.run_number }}
+          name: "AI NoBass Build #${{ github.run_number }}"
+          files: |
+            output.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
