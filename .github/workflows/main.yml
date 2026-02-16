@@ -1,9 +1,7 @@
-name: Auto NoBass Audio Builder
+name: Manual NoBass Audio Builder
 
 on:
-  push:
-    paths:
-      - "input/**.mp3"
+  workflow_dispatch:   # manual trigger
 
 jobs:
   nobass-build:
@@ -20,6 +18,7 @@ jobs:
       - name: Build No-Bass Audio (64kbps)
         run: |
           mkdir -p output
+          shopt -s nullglob
           for f in input/*.mp3; do
             name=$(basename "$f")
             echo "Processing $name"
