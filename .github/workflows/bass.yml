@@ -1,0 +1,46 @@
+name: Remove Bass and Boost Volume
+
+on:
+  workflow_dispatch: # Biar bisa diklik manual dari tab Actions
+
+jobs:
+  process-audio:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # Wajib biar bisa push hasil mp3 balik ke repo
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Demucs
+        run: |
+          python -m pip install --upgrade pip
+          pip install demucs
+
+      - name: Create Directories
+        run: |
+          mkdir -p uploads
+          mkdir -p output
+
+      - name: Run Script
+        run: python main.py
+
+      - name: Commit and Push Result
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/nobass.mp3
+          git commit -m "Add processed audio: no-bass 150% volume" || echo "No changes to commit"
+          git push
