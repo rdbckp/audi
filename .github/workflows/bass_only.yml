@@ -1,4 +1,4 @@
-name: Extract Bass to Release
+name: Bass Only
 
 on:
   workflow_dispatch:
@@ -36,7 +36,7 @@ jobs:
           mkdir -p output
 
       - name: Run Script
-        run: python main.py
+        run: python sa.py
 
       - name: Create Release and Upload Asset
         uses: softprops/action-gh-release@v2
