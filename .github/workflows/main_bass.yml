@@ -1,0 +1,47 @@
+name: Extract Bass Only
+
+on:
+  workflow_dispatch:
+
+jobs:
+  process-audio:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        [cite_start]uses: actions/checkout@v4 [cite: 1]
+
+      - name: Set up Python
+        [cite_start]uses: actions/setup-python@v5 [cite: 1]
+        with:
+          [cite_start]python-version: '3.10' [cite: 1]
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update [cite: 2]
+          sudo apt-get install -y ffmpeg [cite: 2]
+
+      - name: Install Demucs and Dependencies
+        run: |
+          python -m pip install --upgrade pip 
+          pip install torch torchaudio torchcodec --index-url https://download.pytorch.org/whl/cpu 
+          pip install demucs 
+
+      - name: Create Directories
+        run: |
+          mkdir -p uploads [cite: 4]
+          mkdir -p output [cite: 4]
+
+      - name: Run Script
+        run: python main.py
+
+      - name: Commit and Push Result
+        run: |
+          git config --global user.name "github-actions[bot]" [cite: 5]
+          git config --global user.email "github-actions[bot]@users.noreply.github.com" [cite: 5]
+          git add output/ [cite: 5]
+          git commit -m "Add processed audio: Bass track only" || echo "No changes to commit" [cite: 5, 6]
+          git push [cite: 6]
