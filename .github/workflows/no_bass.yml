@@ -1,4 +1,4 @@
-name: Remove Bass and Boost Volume
+name: No Bass
 
 on:
   workflow_dispatch:
@@ -39,10 +39,12 @@ jobs:
       - name: Run Script
         run: python main.py
 
-      - name: Commit and Push Result
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add output/
-          git commit -m "Add processed audio: no-bass 150% volume" || echo "No changes to commit"
-          git push
+      - name: Create Release and Upload Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "bass-result-${{ github.run_number }}"
+          name: "Bass Audio Result #${{ github.run_number }}"
+          body: "File audio ini berisi track tanpa bass"
+          files: output/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
