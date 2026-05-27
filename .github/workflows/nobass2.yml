@@ -1,0 +1,55 @@
+name: No Bass New
+on:
+  workflow_dispatch:
+jobs:
+  process-audio:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Install Demucs and Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchaudio torchcodec --index-url https://download.pytorch.org/whl/cpu
+          pip install demucs
+      - name: Create Directories
+        run: |
+          mkdir -p uploads
+          mkdir -p output
+      - name: Run Script
+        run: python main.py
+      - name: Rename Output to Match Input Filename
+        run: |
+          input_file=$(ls uploads/* | head -1)
+          original_name=$(basename "$input_file" | sed 's/\.[^.]*$//')
+          for f in output/*.mp3; do
+            mv "$f" "output/${original_name}.mp3"
+          done
+      - name: Boost Volume 30%
+        run: |
+          mkdir -p output_boosted
+          for f in output/*.mp3; do
+            filename=$(basename "$f")
+            ffmpeg -i "$f" -filter:a "volume=1.3" -codec:a libmp3lame -q:a 2 "output_boosted/$filename"
+          done
+          rm -rf output
+          mv output_boosted output
+      - name: Create Release and Upload Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "bass-result-${{ github.run_number }}"
+          name: "Bass Audio Result #${{ github.run_number }}"
+          body: "File audio ini berisi track tanpa bass"
+          files: output/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
