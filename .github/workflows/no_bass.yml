@@ -27,6 +27,8 @@ jobs:
       - name: Install Demucs and Dependencies
         run: |
           python -m pip install --upgrade pip
+          # FIX: Install numpy secara eksplisit karena demucs butuh ini tapi tidak selalu ke-install otomatis
+          pip install numpy
           # FIX: Install torchcodec secara manual karena torchaudio membutuhkannya
           pip install torch torchaudio torchcodec --index-url https://download.pytorch.org/whl/cpu
           pip install demucs
